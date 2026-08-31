@@ -12,7 +12,9 @@ export type RequestConfig = {
   path?: string;
 
 
-  body?: string;
+  // String for the JSON APIs; binary (Uint8Array) for multipart uploads
+  // (e.g. attachment UploadFile). Both pass through to fetch untouched.
+  body?: string | Uint8Array<ArrayBuffer>;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
   followRedirects?: boolean;

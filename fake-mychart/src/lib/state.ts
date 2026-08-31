@@ -199,6 +199,8 @@ type State = {
   emergencyContactsByRecord: Record<string, typeof homer.emergencyContacts>;
   ecIdCounter: number;
   composeIdCounter: number;
+  /** Files accepted by UploadFile, newest last — tests assert against this. */
+  uploads: Array<{ documentId: string; filename: string; size: number }>;
   passkeyIdCounter: number;
   bookedAppointments: Array<{
     confirmationNumber: string;
@@ -231,6 +233,7 @@ function freshState(): State {
     },
     ecIdCounter: 100,
     composeIdCounter: 1000,
+    uploads: [],
     passkeyIdCounter: 0,
     bookedAppointments: [],
   };
@@ -245,6 +248,7 @@ export function resetState(): void {
   state.emergencyContactsByRecord = next.emergencyContactsByRecord;
   state.ecIdCounter = next.ecIdCounter;
   state.composeIdCounter = next.composeIdCounter;
+  state.uploads = next.uploads;
   state.passkeyIdCounter = next.passkeyIdCounter;
   state.bookedAppointments.length = 0;
   resetSessions();

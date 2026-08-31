@@ -61,6 +61,7 @@ import {
   type MessageTopic,
 } from '../scrapers/myChart/chart/messages/sendMessage';
 import { sendReply } from '../scrapers/myChart/chart/messages/sendReply';
+import { uploadAttachment } from '../scrapers/myChart/chart/messages/uploadAttachment';
 import { deleteMessage } from '../scrapers/myChart/chart/messages/deleteMessage';
 
 import { getBillingHistory } from '../scrapers/myChart/chart/bills/bills';
@@ -108,7 +109,7 @@ export type CapabilityKind =
    */
   | 'account';
 
-export type CapabilityParamType = 'string' | 'number' | 'boolean' | 'object';
+export type CapabilityParamType = 'string' | 'number' | 'boolean' | 'object' | 'array';
 
 export interface CapabilityParam {
   name: string;
@@ -346,6 +347,35 @@ async function messagingToken(request: MyChartRequest): Promise<string> {
   const token = await getVerificationToken(request);
   if (!token) throw new Error('Could not get a MyChart verification token for messaging.');
   return token;
+}
+
+/**
+ * Upload any `attachments` capability args to the portal, returning the
+ * document ids the send flow's documentIds[] expects. Each item:
+ * {filename, mimeType, dataBase64}. Absent/empty args mean no files and
+ * upload nothing. A failed upload aborts the send — a message that claims
+ * an attachment but carries none is exactly the failure this prevents.
+ */
+async function uploadCapabilityAttachments(request: MyChartRequest, args: CapabilityArgs): Promise<string[]> {
+  const raw = args.attachments;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const documentIds: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) throw new Error('attachments[] items must be {filename, mimeType, dataBase64} objects.');
+    const a = entry as Record<string, unknown>;
+    const filename = typeof a.filename === 'string' && a.filename.trim() ? a.filename.trim() : 'attachment';
+    const mimeType = typeof a.mimeType === 'string' && a.mimeType.trim() ? a.mimeType.trim() : 'application/octet-stream';
+    if (typeof a.dataBase64 !== 'string' || a.dataBase64.length === 0) {
+      throw new Error(`Attachment "${filename}" has no dataBase64 payload.`);
+    }
+    const data = Uint8Array.from(atob(a.dataBase64), (c) => c.charCodeAt(0));
+    const uploaded = await uploadAttachment(request, { data, filename, mimeType });
+    if (!uploaded.success || !uploaded.documentId) {
+      throw new Error(`Attachment "${filename}" failed to upload: ${uploaded.error ?? 'unknown error'}`);
+    }
+    documentIds.push(uploaded.documentId);
+  }
+  return documentIds;
 }
 
 /** Resolve `medication_key` directly, or `medication_name` by fuzzy match. */
@@ -730,6 +760,7 @@ const CAPABILITY_IMPLS: readonly CapabilityImpl[] = [
       { name: 'topic', type: 'string', description: 'Topic name, e.g. "Medical Question". Defaults to the first available topic.' },
       { name: 'subject', type: 'string', description: 'Subject line.', required: true },
       { name: 'message', type: 'string', description: 'Body of the message.', required: true },
+      { name: 'attachments', type: 'array', description: 'Optional files to attach. Items: {filename, mimeType, dataBase64} — dataBase64 is the raw file bytes.' },
     ],
     run: async (request, args) => {
       const token = await messagingToken(request);
@@ -744,6 +775,7 @@ const CAPABILITY_IMPLS: readonly CapabilityImpl[] = [
         topic,
         subject: requireStr(args, 'subject'),
         messageBody: requireStr(args, 'message'),
+        documentIds: await uploadCapabilityAttachments(request, args),
       });
       // Say who it went to and under which topic. The topic can be a
       // substitution when the requested one doesn't exist on this instance,
@@ -767,11 +799,13 @@ const CAPABILITY_IMPLS: readonly CapabilityImpl[] = [
     params: [
       { name: 'conversation_id', type: 'string', description: 'Conversation id from get_messages.', required: true },
       { name: 'message', type: 'string', description: 'Reply text.', required: true },
+      { name: 'attachments', type: 'array', description: 'Optional files to attach. Items: {filename, mimeType, dataBase64} — dataBase64 is the raw file bytes.' },
     ],
-    run: (request, args) =>
+    run: async (request, args) =>
       sendReply(request, {
         conversationId: requireStr(args, 'conversation_id'),
         messageBody: requireStr(args, 'message'),
+        documentIds: await uploadCapabilityAttachments(request, args),
       }),
   },
   {

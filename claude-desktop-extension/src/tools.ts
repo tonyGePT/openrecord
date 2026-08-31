@@ -154,6 +154,9 @@ function zodForParam(param: CapabilityParam): z.ZodType {
     case 'boolean':
       schema = z.boolean();
       break;
+    case 'array':
+      schema = z.array(z.record(z.string(), z.unknown()));
+      break;
     case 'object':
       schema = z.unknown();
       break;

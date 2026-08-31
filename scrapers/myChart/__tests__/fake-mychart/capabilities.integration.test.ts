@@ -202,6 +202,47 @@ describe('capability registry against fake-mychart', () => {
     expect(result.success).toBe(true)
   }, 30_000)
 
+  it('uploads and attaches a file when send_message carries attachments', async () => {
+    // A tiny real PDF header, so the payload is honest multipart bytes.
+    const pdfBase64 = Buffer.from('%PDF-1.4 test attachment').toString('base64')
+    const { recipients } = (await executeCapability(session, 'get_message_recipients')) as {
+      recipients: Array<{ displayName: string }>
+    }
+
+    const result = (await executeCapability(session, 'send_message', {
+      recipient_name: recipients[0]!.displayName,
+      topic: 'Medical Question',
+      subject: 'Attachment capability test',
+      message: 'This message carries an attachment.',
+      attachments: [{ filename: 'test-attachment.pdf', mimeType: 'application/pdf', dataBase64: pdfBase64 }],
+    })) as { success: boolean; error?: string }
+
+    expect(result.error).toBeUndefined()
+    expect(result.success).toBe(true)
+
+    // The fake portal recorded the upload only if UploadFile was actually
+    // called before the send, with the bytes surviving the round trip.
+    const uploads = await (await fetch(`http://${HOST}/api/testing/uploads`)).json()
+    const upload = (uploads as Array<{ filename: string; size: number }>).find(
+      (u) => u.filename === 'test-attachment.pdf',
+    )
+    expect(upload).toBeDefined()
+    expect(upload!.size).toBe(Buffer.from('%PDF-1.4 test attachment').length)
+  }, 30_000)
+
+  it('rejects a send whose attachment payload is missing dataBase64', async () => {
+    const { recipients } = (await executeCapability(session, 'get_message_recipients')) as {
+      recipients: Array<{ displayName: string }>
+    }
+    const promise = executeCapability(session, 'send_message', {
+      recipient_name: recipients[0]!.displayName,
+      subject: 'x',
+      message: 'y',
+      attachments: [{ filename: 'broken.pdf', mimeType: 'application/pdf' }],
+    })
+    await expect(promise).rejects.toThrow(/no dataBase64 payload/)
+  }, 30_000)
+
   it('refuses to guess which provider was meant', async () => {
     const promise = executeCapability(session, 'send_message', {
       recipient_name: 'definitely-not-a-real-provider',

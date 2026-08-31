@@ -45,6 +45,8 @@ export type SendNewMessageParams = {
   subject: string;
   /** The message body text */
   messageBody: string;
+  /** Document ids from UploadFile to attach to the message */
+  documentIds?: string[];
   /** Organization ID (usually empty string for default org) */
   organizationId?: string;
 };
@@ -250,11 +252,11 @@ export async function sendNewMessage(
       value: params.topic.value,
     },
     conversationId: '',
-    organizationId,
     viewers: [{ wprId }],
+    organizationId,
     messageBody: [params.messageBody],
+    documentIds: params.documentIds ?? [],
     messageSubject: params.subject,
-    documentIds: [],
     includeOtherViewers: false,
     composeId,
   };

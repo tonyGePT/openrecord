@@ -20,6 +20,8 @@ export type SendReplyParams = {
   messageBody: string;
   /** Organization ID (usually empty string for default org) */
   organizationId?: string;
+  /** Document ids from UploadFile to attach to the reply */
+  documentIds?: string[];
 };
 
 export type SendReplyResult = {
@@ -137,7 +139,7 @@ export async function sendReply(
     organizationId,
     viewers: [{ wprId }],
     messageBody: [params.messageBody],
-    documentIds: [],
+    documentIds: params.documentIds ?? [],
     includeOtherViewers: false,
     composeId,
   };

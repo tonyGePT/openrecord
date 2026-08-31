@@ -1197,6 +1197,21 @@ async function renderPost(request: NextRequest, { params }: { params: Promise<{ 
       return json('');
     }
   }
+  // ── Attachment upload (multipart form-data) ───────────────────
+  // Captured live (Kaiser, 2026-05-03): the browser posts the file plus the
+  // CSRF token as multipart/form-data and gets the document id back as a
+  // bare JSON string. The fake stores the bytes so tests can assert the
+  // attachment actually accompanied the send.
+  if (lower === 'api/medicaladvicerequests/uploadfile') {
+    const form = await request.formData()
+    const file = form.get('file')
+    if (!(file instanceof File)) return json('')
+    const docId = `DOC-${state.composeIdCounter++}-${file.name}`
+    state.uploads = state.uploads ?? []
+    state.uploads.push({ documentId: docId, filename: file.name, size: file.size })
+    return json(docId)
+  }
+
 
   // ── Medical Advice Requests (new message compose) ─────────────
   if (lower === 'api/medicaladvicerequests/getsubtopics') {
